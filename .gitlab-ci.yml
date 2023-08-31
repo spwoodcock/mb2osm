@@ -2,16 +2,6 @@ stages:
   - build
   - release
 
-build:
-  stage: build
-  image: docker.io/golang:1.20
-  script:
-    - go build
-  artifacts:
-    paths:
-      - ./mb2osm
-    expire_in: 1 hour
-
 release:
   stage: release
   only:
