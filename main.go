@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	_ "image/jpeg"
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -20,8 +19,8 @@ func toJPEG(rawBytes []byte, quality int) ([]byte, error) {
 	}
 
 	// Convert the image to JPEG format with the specified quality
-	jpegBuf := new(bytes.Buffer)
-	err = jpeg.Encode(jpegBuf, img, &jpeg.Options{Quality: quality})
+	var jpegBuf bytes.Buffer
+	err = jpeg.Encode(&jpegBuf, img, &jpeg.Options{Quality: quality})
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +83,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Iterate through the rows and insert data into the output database
+	// Prepare the INSERT statement
+	stmt, err := outputDB.Prepare("INSERT INTO tiles (x, y, z, s, image) VALUES (?, ?, ?, ?, ?)")
+	if err != nil {
+		fmt.Println("Error preparing statement:", err)
+		os.Exit(1)
+	}
+	defer stmt.Close()
+
+	tx, err := outputDB.Begin()
+	if err != nil {
+		fmt.Println("Error starting transaction:", err)
+		os.Exit(1)
+	}
+	defer tx.Rollback()
+
+	var jpegBuf bytes.Buffer
+
 	for inputCursor.Next() {
 		var zoomLevel, tileColumn, tileRow int
 		var tileData []byte
@@ -106,17 +121,25 @@ func main() {
 		y := (1 << uint(zoomLevel)) - 1 - tileRow
 		z := 17 - zoomLevel
 
-		_, err = outputDB.Exec("INSERT INTO tiles (x, y, z, s, image) VALUES (?, ?, ?, ?, ?)",
-			tileColumn, y, z, 0, tileData)
+		jpegBuf.Reset()
+		_, err = stmt.Exec(tileColumn, y, z, 0, tileData)
 		if err != nil {
 			fmt.Println("Error inserting into tiles table:", err)
 			continue
 		}
 	}
 
-	_, err = outputDB.Exec("INSERT INTO info (maxzoom, minzoom) SELECT MAX(z), MIN(z) FROM tiles")
+	_, err = tx.Exec("INSERT INTO info (maxzoom, minzoom) SELECT MAX(z), MIN(z) FROM tiles")
 	if err != nil {
 		fmt.Println("Error inserting into info table:", err)
+		tx.Rollback()
+		os.Exit(1)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		fmt.Println("Error committing transaction:", err)
+		os.Exit(1)
 	}
 
 	fmt.Println("Conversion completed successfully.")
