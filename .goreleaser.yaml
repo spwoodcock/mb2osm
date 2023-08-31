@@ -1,118 +1,29 @@
-env:
-- CGO_ENABLED=1
-before:
-  hooks:
-    - go mod tidy
-builds:
-
-  # MacOS
-  - id: dmd-darwin-amd64
-    binary: dmd
-    main: ./cmd/dmd
-    goarch:
-      - amd64
-    goos:
-      - darwin
-    env:
-      - CC=o64-clang
-      - CXX=o64-clang++
-    flags:
-      - -trimpath
-
-  # MacOS ARM
-  - id: dmd-darwin-arm64
-    binary: dmd
-    main: ./cmd/dmd
-    goarch:
-      - arm64
-    goos:
-      - darwin
-    env:
-      - CC=oa64-clang
-      - CXX=oa64-clang++
-    flags:
-      - -trimpath
-  
-  # Linux
-  - id: dmd-linux-amd64
-    binary: dmd
-    main: ./cmd/dmd
-    env:
-      - CC=x86_64-linux-gnu-gcc
-      - CXX=x86_64-linux-gnu-g++
-    goarch:
-      - amd64
-    goos:
-      - linux
-    flags:
-      - -trimpath
-    ldflags:
-      - -extldflags "-lc -lrt -lpthread --static"
-
-  # Linux ARM
-  - id: dmd-linux-arm64
-    binary: dmd
-    main: ./cmd/dmd
-    goarch:
-      - arm64
-    goos:
-      - linux
-    env:
-      - CC=aarch64-linux-gnu-gcc
-      - CXX=aarch64-linux-gnu-g++
-    flags:
-      - -trimpath
-    ldflags:
-      - -extldflags "-lc -lrt -lpthread --static"
-
-  # Windows
-  - id: dmd-windows-amd64
-    binary: dmd
-    main: ./cmd/dmd
-    goarch:
-      - amd64
-    goos:
-      - windows
-    env:
-      - CC=x86_64-w64-mingw32-gcc
-      - CXX=x86_64-w64-mingw32-g++
-    flags:
-      - -trimpath
-      - -buildmode=exe
-
-universal_binaries:
-  - id: dmd-darwin-universal
-    ids:
-      - dmd-darwin-amd64
-      - dmd-darwin-arm64
-    replace: true
-    name_template: "dmd"
 archives:
-  - id: w/version
-    builds:
-      - dmd-darwin-universal
-      - dmd-linux-amd64
-      - dmd-linux-arm64
-      - dmd-windows-amd64
-    name_template: "dmd_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    wrap_in_directory: false
-    format: zip
+  - builds:
+      - mb2osm
     files:
       - none*
-  - id: wo/version
-    builds:
-      - dmd-darwin-universal
-      - dmd-linux-amd64
-      - dmd-linux-arm64
-      - dmd-windows-amd64
-    name_template: "dmd_{{ .Os }}_{{ .Arch }}"
-    wrap_in_directory: false
     format: zip
-    files:
-      - none*
+    id: w/version
+    name_template: "mb2osm_archive_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    rlcp: true
+    wrap_in_directory: false
+builds:
+- binary: mb2osm
+  flags:
+    - -trimpath
+  id: mb2osm
+  ignore:
+    - goarch: "386"
+      goos: windows
+  main: main.go
 
 checksum:
   name_template: 'checksums.txt'
+env:
+- CGO_ENABLED=0
+gitlab_urls:
+  use_package_registry: true
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
 changelog:
@@ -121,5 +32,3 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-gitlab_urls:
-  use_package_registry: true
