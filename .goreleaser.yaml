@@ -8,8 +8,10 @@ builds:
     goos:
       - linux
       - windows
-      # Disable for CGO project, no darwin/arm64 option
-      # - darwin
+      - darwin
+    goarch:
+      # Disable for CGO project, arm64 support
+      - amd64
 
 archives:
   - format: tar.gz
@@ -23,11 +25,7 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     # use zip for windows archives
     format_overrides:
-    - goos: windows_arm64
-      format: zip
-    - goos: windows_amd64
-      format: zip
-    - goos: windows_386
+    - goos: windows
       format: zip
 checksum:
   name_template: 'checksums.txt'
