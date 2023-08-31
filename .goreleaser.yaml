@@ -8,9 +8,10 @@ builds:
     goos:
       - linux
       - windows
-      - darwin
+      # Disable for CGO project, darwin requires arm64
+      # - darwin
     goarch:
-      # Disable for CGO project, arm64 support
+      # Disable for CGO project, no arm64 support
       - amd64
 
 archives:
