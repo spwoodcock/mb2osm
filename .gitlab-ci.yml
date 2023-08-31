@@ -1,18 +1,14 @@
 stages:
   - release
 
-# See https://goreleaser.com/ci/gitlab/
-
 release:
   stage: release
   image:
-    name: goreleaser/goreleaser
+    name: goreleaser/goreleaser-cross:v1.21
     entrypoint: ['']
   only:
     - tags
   variables:
-    # Disable shallow cloning so that goreleaser can diff between tags to
-    # generate a changelog.
     GIT_DEPTH: 0
   script:
     - goreleaser release --clean
