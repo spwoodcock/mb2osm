@@ -1,27 +1,110 @@
+env:
+- CGO_ENABLED=1
+
+builds:
+  # MacOS
+  - id: mb2osm-darwin-amd64
+    binary: mb2osm
+    main: main.go
+    goarch:
+      - amd64
+    goos:
+      - darwin
+    env:
+      - CC=o64-clang
+      - CXX=o64-clang++
+    flags:
+      - -trimpath
+
+  # MacOS ARM
+  - id: mb2osm-darwin-arm64
+    binary: mb2osm
+    main: main.go
+    goarch:
+      - arm64
+    goos:
+      - darwin
+    env:
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    flags:
+      - -trimpath
+
+  # Linux
+  - id: mb2osm-linux-amd64
+    binary: mb2osm
+    main: main.go
+    env:
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
+    goarch:
+      - amd64
+    goos:
+      - linux
+    flags:
+      - -trimpath
+    ldflags:
+      - -extldflags "-lc -lrt -lpthread --static"
+
+  # Linux ARM
+  - id: mb2osm-linux-arm64
+    binary: mb2osm
+    main: main.go
+    goarch:
+      - arm64
+    goos:
+      - linux
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    flags:
+      - -trimpath
+    ldflags:
+      - -extldflags "-lc -lrt -lpthread --static"
+
+  # Windows
+  - id: mb2osm-windows-amd64
+    binary: mb2osm
+    main: main.go
+    goarch:
+      - amd64
+    goos:
+      - windows
+    env:
+      - CC=x86_64-w64-mingw32-gcc
+      - CXX=x86_64-w64-mingw32-g++
+    flags:
+      - -trimpath
+      - -buildmode=exe
+
 archives:
-  - builds:
-      - mb2osm
+  - id: w/version
+    builds:
+      - mb2osm-darwin-amd64
+      - mb2osm-darwin-arm64
+      - mb2osm-linux-amd64
+      - mb2osm-linux-arm64
+      - mb2osm-windows-amd64
+    name_template: "mb2osm_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+    format: zip
     files:
       - none*
-    format: zip
-    id: w/version
-    name_template: "mb2osm_archive_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    rlcp: true
+  - id: wo/version
+    builds:
+      - mb2osm-darwin-amd64
+      - mb2osm-darwin-arm64
+      - mb2osm-linux-amd64
+      - mb2osm-linux-arm64
+      - mb2osm-windows-amd64
+    name_template: "mb2osm_{{ .Os }}_{{ .Arch }}"
     wrap_in_directory: false
-builds:
-- binary: mb2osm
-  flags:
-    - -trimpath
-  id: mb2osm
-  ignore:
-    - goarch: "386"
-      goos: windows
-  main: main.go
+    format: zip
+    files:
+      - none*
 
 checksum:
   name_template: 'checksums.txt'
-env:
-- CGO_ENABLED=0
 gitlab_urls:
   use_package_registry: true
 snapshot:
