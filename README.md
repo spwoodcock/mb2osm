@@ -30,3 +30,12 @@ mb2osm [-flags] input.mbtiles output.sqlitedb
         JPEG quality 0-100 (default 80)
   -v    Show debug logs
 ```
+
+## Making a new release
+
+- This project users Goreleaser in combination with a Gitlab workflow.
+- Versions are managed manually by making a new tag / release.
+- The `GITLAB_TOKEN` variable expires every year, so must be regenerated
+  via Project Access Tokens, then set in Settings > CI/CD > Variables.
+- Once `GITLAB_TOKEN` is set, the workflow should be able to publish
+  the built artifacts to the relevant release.
