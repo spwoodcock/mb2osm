@@ -5,7 +5,7 @@ builds:
   # MacOS
   - id: mb2osm-darwin-amd64
     binary: mb2osm
-    main: main.go
+    main: cmd/main.go
     goarch:
       - amd64
     goos:
@@ -19,7 +19,7 @@ builds:
   # MacOS ARM
   - id: mb2osm-darwin-arm64
     binary: mb2osm
-    main: main.go
+    main: cmd/main.go
     goarch:
       - arm64
     goos:
@@ -33,7 +33,7 @@ builds:
   # Linux
   - id: mb2osm-linux-amd64
     binary: mb2osm
-    main: main.go
+    main: cmd/main.go
     env:
       - CC=x86_64-linux-gnu-gcc
       - CXX=x86_64-linux-gnu-g++
@@ -49,7 +49,7 @@ builds:
   # Linux ARM
   - id: mb2osm-linux-arm64
     binary: mb2osm
-    main: main.go
+    main: cmd/main.go
     goarch:
       - arm64
     goos:
@@ -65,7 +65,7 @@ builds:
   # Windows
   - id: mb2osm-windows-amd64
     binary: mb2osm
-    main: main.go
+    main: cmd/main.go
     goarch:
       - amd64
     goos:
