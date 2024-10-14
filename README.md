@@ -7,8 +7,6 @@ A command line tool convert MBTiles format to OSMAnd SQLite format.
 
 The files should have an `.sqlitedb` extension to load into OSMAnd.
 
-Credit to @tarwirdur for Python code / inspiration.
-
 > NOTE:
 >
 > OSMAnd uses "BigPlanet" SQLite as supported by MOBAC.
@@ -26,8 +24,6 @@ Usage:
 mb2osm [-flags] input.mbtiles output.sqlitedb
 
   -f    Force overwrite
-  -quality int
-        JPEG quality 0-100 (default 80)
   -v    Show debug logs
 ```
 
