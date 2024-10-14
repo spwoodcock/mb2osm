@@ -11,7 +11,6 @@ import (
 
 var (
 	verbose   = flag.Bool("v", false, "Show debug logs")
-	quality   = flag.Int("quality", 80, "JPEG quality 0-100")
 	overwrite = flag.Bool("f", false, "Force overwrite")
 )
 
@@ -86,7 +85,11 @@ func main() {
 	}
 
 	// Run main MbtilesToOsm function
-	err := converter.MbtilesToOsm(inputFile, outputFile, *quality, *overwrite)
+	err := converter.MbtilesToOsm(
+		inputFile,
+		outputFile,
+		*overwrite,
+	)
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)

@@ -1,230 +1,131 @@
+// Convert MBTile format --> OSMAnd SQLite format
+// 1. Copy the .mbtiles to a new .sqlitedb file
+// 2. Rename the columns to match the OSMAnd spec
+// 3. Rewrite the zoom levels to match the OSMAnd spec
+// 4. Remove the 'metadata' table and add an 'info' table
+
 package converter
 
 import (
-	"os"
-	"bytes"
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"image"
-	"image/jpeg"
-	_ "image/png"
-	"sync"
+	"os"
+	"io"
 
-	// Used as underlying db driver
-	_ "github.com/mattn/go-sqlite3"
+	// We use a pure Go implementation of the SQLite driver
+	// and not the mattn/go-sqlite3 C bindings.
+	// Using the C bindings would require CGO_ENABLED=1, and
+	// the SQLite C library to be bundled in the final binary.
+	// While this is possible for Mac/Windows/Linux without
+	// too much effort, it's not as easy for the Android build.
+	_ "modernc.org/sqlite"
 )
 
-// Initialize the output database with the required table schema.
-func initializeDB(db *sql.DB) error {
-	_, err := db.Exec("CREATE TABLE tiles (x INT, y INT, z INT, image BLOB, PRIMARY KEY (x, y, z))")
-	if err != nil {
-		return fmt.Errorf("error creating tiles table: %v", err)
-	}
-
-	_, err = db.Exec("CREATE INDEX IND on tiles (x,y,z)")
-	if err != nil {
-		return fmt.Errorf("error creating tiles table index: %v", err)
-	}
-
-	_, err = db.Exec("CREATE TABLE info (maxzoom INT, minzoom INT, tilenumbering TEXT)")
-	if err != nil {
-		return fmt.Errorf("error creating info table: %v", err)
-	}
-
-	return nil
-}
-
-// Convert raw tile data to JPEG with a specified quality.
-func toJPEG(rawBytes []byte, quality int) ([]byte, error) {
-	_, format, err := image.DecodeConfig(bytes.NewReader(rawBytes))
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode image config: %v", err)
-	}
-	slog.Debug(fmt.Sprintf("detected image format: %s", format))
-
-	// Then call image.Decode if valid format
-	if format != "jpeg" && format != "png" {
-		return nil, fmt.Errorf("unsupported image format: %s", format)
-	}
-
-	img, _, err := image.Decode(bytes.NewReader(rawBytes))
-	if err != nil {
-		return nil, fmt.Errorf("error decoding image: %v", err)
-	}
-
-	var jpegBuf bytes.Buffer
-	err = jpeg.Encode(&jpegBuf, img, &jpeg.Options{Quality: quality})
-	if err != nil {
-		return nil, err
-	}
-
-	return jpegBuf.Bytes(), nil
-}
-
-// Process a single tile by converting to JPEG (if required) and calculating its coordinates.
-func processTile(tileColumn, tileRow, zoomLevel int, tileData *[]byte, jpegQuality int) (int, int, []byte, error) {
-	var jpgTileData []byte
-	var err error
-
-	if jpegQuality > 0 {
-		jpgTileData, err = toJPEG(*tileData, jpegQuality)
-		if err != nil {
-			return 0, 0, nil, fmt.Errorf("error converting to JPEG: %v", err)
-		}
-	} else {
-		// If no conversion is required, just return the original data.
-		jpgTileData = *tileData
-	}
-
-	y := (1 << uint(zoomLevel)) - 1 - tileRow
-	return tileColumn, y, jpgTileData, nil
-}
-
-// Worker goroutine that processes tiles and inserts them into the database.
-func worker(wg *sync.WaitGroup, tileChan <-chan []interface{}, stmt *sql.Stmt, jpegQuality int) {
-	defer wg.Done()
-
-	for tile := range tileChan {
-		tileColumn := tile[0].(int)
-		tileRow := tile[1].(int)
-		zoomLevel := tile[2].(int)
-		tileData := tile[3].([]byte)
-
-		x, y, jpgTileData, err := processTile(tileColumn, tileRow, zoomLevel, &tileData, jpegQuality)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		_, err = stmt.Exec(x, y, 17-zoomLevel, jpgTileData)
-		if err != nil {
-			fmt.Println("error inserting tile:", err)
-			continue
-		}
-	}
-}
-
-// Main function that orchestrates the conversion of MBTiles to OSM tiles.
-func MbtilesToOsm(
-	inputDBPath string,
-	outputDBPath string,
-	jpegQuality int,
-	overwrite bool,
-) error {
-	slog.Info("Attempting conversion.", "input", inputDBPath, "output", outputDBPath)
-
+// Copy the input SQLite DB to the output path
+func copyDB(inputDBPath, outputDBPath string, overwrite bool) error {
 	// Check if output file already exists
 	if _, err := os.Stat(outputDBPath); err == nil {
-		// File exists
 		slog.Debug("File already exists", "filename", outputDBPath)
 		if overwrite {
-			// Overwrite is allowed, delete the existing file
 			slog.Debug("Overwrite is allowed. Deleting existing file", "filename", outputDBPath)
 			if err := os.Remove(outputDBPath); err != nil {
 				return fmt.Errorf("failed to overwrite file (%v): %v", outputDBPath, err)
 			}
 		} else {
-			// Overwrite is not allowed, return an error
 			return fmt.Errorf("output file already exists: %v", outputDBPath)
 		}
 	} else if !os.IsNotExist(err) {
-		// Some other error occurred (e.g., permission issues)
 		return fmt.Errorf("failed to check file existence: %v", err)
 	}
 
-	// Check input file exists
-	_, err := os.Stat(inputDBPath)
+	// Open the input file for reading
+	inputFile, err := os.Open(inputDBPath)
 	if err != nil {
-		return fmt.Errorf("file does not exist: %v", inputDBPath)
+		return fmt.Errorf("error opening input database file: %v", err)
+	}
+	defer inputFile.Close()
+
+	// Create the output file for writing
+	outputFile, err := os.Create(outputDBPath)
+	if err != nil {
+		return fmt.Errorf("error creating output database file: %v", err)
+	}
+	defer outputFile.Close()
+
+	// Copy the contents of the input DB to the output DB
+	_, err = io.Copy(outputFile, inputFile)
+	if err != nil {
+		return fmt.Errorf("error copying database: %v", err)
 	}
 
-	// Open input database
-	inputDB, err := sql.Open("sqlite3", inputDBPath)
-	if err != nil {
-		return fmt.Errorf("error opening input database: %v", err)
-	}
-	defer inputDB.Close()
+	return nil
+}
 
-	// Open output database
-	outputDB, err := sql.Open("sqlite3", outputDBPath)
+// Update the schema and data of the output database
+func updateDBSchema(db *sql.DB) error {
+	// Rename columns
+	_, err := db.Exec(`
+		ALTER TABLE tiles RENAME COLUMN tile_column TO x;
+		ALTER TABLE tiles RENAME COLUMN tile_row TO y;
+		ALTER TABLE tiles RENAME COLUMN zoom_level TO z;
+	`)
+	if err != nil {
+		return fmt.Errorf("error renaming columns: %v", err)
+	}
+
+	// Update the zoom levels (z column)
+	_, err = db.Exec(`UPDATE tiles SET z = 17 - z`)
+	if err != nil {
+		return fmt.Errorf("error updating zoom levels: %v", err)
+	}
+
+	// Delete the metadata table
+	_, err = db.Exec(`DROP TABLE IF EXISTS metadata`)
+	if err != nil {
+		return fmt.Errorf("error dropping metadata table: %v", err)
+	}
+
+	// Insert the new info table
+	_, err = db.Exec(`
+		CREATE TABLE info (maxzoom INT, minzoom INT, tilenumbering TEXT);
+		INSERT INTO info (maxzoom, minzoom, tilenumbering) VALUES (17, 0, 'osm');
+	`)
+	if err != nil {
+		return fmt.Errorf("error inserting info table: %v", err)
+	}
+
+	return nil
+}
+
+// Main function to convert MBTiles by copying and updating the DB schema and data
+func MbtilesToOsm(
+	inputDBPath string,
+	outputDBPath string,
+	overwrite bool,
+) error {
+	slog.Info("Starting conversion", "input", inputDBPath, "output", outputDBPath)
+
+	// Copy the input database file to the output path
+	err := copyDB(inputDBPath, outputDBPath, overwrite)
+	if err != nil {
+		return fmt.Errorf("error copying database: %v", err)
+	}
+
+	// Open the output database
+	outputDB, err := sql.Open("sqlite", outputDBPath)
+	outputDB.SetMaxOpenConns(1)
 	if err != nil {
 		return fmt.Errorf("error opening output database: %v", err)
 	}
 	defer outputDB.Close()
 
-	// Initialize output database schema
-	err = initializeDB(outputDB)
+	// Update the schema and data in the copied DB
+	err = updateDBSchema(outputDB)
 	if err != nil {
-		return err
+		return fmt.Errorf("error updating database schema: %v", err)
 	}
 
-	// Prepare the insert statement for tiles
-	stmt, err := outputDB.Prepare("INSERT INTO tiles (x, y, z, image) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return fmt.Errorf("error preparing statement: %v", err)
-	}
-	defer stmt.Close()
-
-	// Begin a transaction for better performance
-	tx, err := outputDB.Begin()
-	if err != nil {
-		return fmt.Errorf("error starting transaction: %v", err)
-	}
-	defer tx.Rollback()
-
-	// Query all the tiles from the input database
-	inputCursor, err := inputDB.Query("SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles")
-	if err != nil {
-		return fmt.Errorf("error querying input database: %v", err)
-	}
-	defer inputCursor.Close()
-
-	// Create a buffered channel for workers to process tiles concurrently
-	tileChan := make(chan []interface{}, 100)
-	var wg sync.WaitGroup
-
-	// Launch multiple worker goroutines to process the tiles in parallel
-	numWorkers := 5
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go worker(&wg, tileChan, stmt, jpegQuality)
-	}
-
-	// Read from the input cursor and send tiles to the worker channel
-	for inputCursor.Next() {
-		var zoomLevel, tileColumn, tileRow int
-		var tileData []byte
-		err := inputCursor.Scan(&zoomLevel, &tileColumn, &tileRow, &tileData)
-		if err != nil {
-			fmt.Println("error scanning input row:", err)
-			continue
-		}
-
-		tileChan <- []interface{}{tileColumn, tileRow, zoomLevel, tileData}
-	}
-
-	// Close the channel to signal no more tiles, and wait for workers to finish
-	close(tileChan)
-	wg.Wait()
-
-	// Commit the transaction after all tiles have been processed
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("error committing transaction: %v", err)
-	}
-
-	// Insert the zoom level info into the database
-	_, err = outputDB.Exec(`
-		INSERT INTO info
-		(maxzoom, minzoom, tilenumbering)
-		SELECT MAX(z), MIN(z), 'BigPlanet' FROM tiles
-	`)
-	if err != nil {
-		return fmt.Errorf("error inserting into info table: %v", err)
-	}
-
-	slog.Info("Conversion completed successfully.")
-
+	slog.Info("Conversion completed successfully.", "output", outputDBPath)
 	return nil
 }
