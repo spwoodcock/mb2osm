@@ -1,107 +1,44 @@
 version: 2
 
-env:
-- CGO_ENABLED=1
+# NOTE for this release we cannot do a simple CGO_ENABLED=0 as we rely
+# on CGO for go-sqlite3, which is simply a wrapper / binding for the
+# SQLite C library.
+
+# Instead we build CGO_ENABLED=1 and use alternative C compilers to
+# bundle the C library into the built binary.
 
 builds:
-  # MacOS
-  - id: mb2osm-darwin-amd64
-    binary: mb2osm
+  - binary: mb2osm
     main: cmd/main.go
-    goarch:
-      - amd64
-    goos:
-      - darwin
     env:
-      - CC=o64-clang
-      - CXX=o64-clang++
+      - CGO_ENABLED=1
+    # required to build and bundle SQLite C library
+    buildmode: "c-shared"
     flags:
       - -trimpath
-
-  # MacOS ARM
-  - id: mb2osm-darwin-arm64
-    binary: mb2osm
-    main: cmd/main.go
-    goarch:
-      - arm64
     goos:
-      - darwin
-    env:
-      - CC=oa64-clang
-      - CXX=oa64-clang++
-    flags:
-      - -trimpath
-
-  # Linux
-  - id: mb2osm-linux-amd64
-    binary: mb2osm
-    main: cmd/main.go
-    env:
-      - CC=x86_64-linux-gnu-gcc
-      - CXX=x86_64-linux-gnu-g++
-    goarch:
-      - amd64
-    goos:
+      # - android
       - linux
-    flags:
-      - -trimpath
-    ldflags:
-      - -extldflags "-lc -lrt -lpthread --static"
-
-  # Linux ARM
-  - id: mb2osm-linux-arm64
-    binary: mb2osm
-    main: cmd/main.go
-    goarch:
-      - arm64
-    goos:
-      - linux
-    env:
-      - CC=aarch64-linux-gnu-gcc
-      - CXX=aarch64-linux-gnu-g++
-    flags:
-      - -trimpath
-    ldflags:
-      - -extldflags "-lc -lrt -lpthread --static"
-
-  # Windows
-  - id: mb2osm-windows-amd64
-    binary: mb2osm
-    main: cmd/main.go
-    goarch:
-      - amd64
-    goos:
       - windows
-    env:
-      - CC=x86_64-w64-mingw32-gcc
-      - CXX=x86_64-w64-mingw32-g++
-    flags:
-      - -trimpath
-      - -buildmode=exe
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # ignore:
+    #   # we only need the arm64 build on android
+    #   - goos: android
+    #     goarch: amd64
+    ldflags:
+      - -s -w -X main.version={{.Tag}} -X main.buildTime={{.Date}}
 
 archives:
-  - id: w/version
-    builds:
-      - mb2osm-darwin-amd64
-      - mb2osm-darwin-arm64
-      - mb2osm-linux-amd64
-      - mb2osm-linux-arm64
-      - mb2osm-windows-amd64
-    name_template: "mb2osm_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - name_template: "mb2osm_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     wrap_in_directory: false
-    format: zip
-    files:
-      - none*
-  - id: wo/version
-    builds:
-      - mb2osm-darwin-amd64
-      - mb2osm-darwin-arm64
-      - mb2osm-linux-amd64
-      - mb2osm-linux-arm64
-      - mb2osm-windows-amd64
-    name_template: "mb2osm_{{ .Os }}_{{ .Arch }}"
-    wrap_in_directory: false
-    format: zip
+    format: tar.gz
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        format: zip
     files:
       - none*
 
@@ -110,10 +47,120 @@ checksum:
 gitlab_urls:
   use_package_registry: true
 snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  version_template: '{{ .Tag }}-next'
 changelog:
   sort: asc
   filters:
     exclude:
       - '^docs:'
       - '^test:'
+
+# env:
+# - CGO_ENABLED=1
+
+# builds:
+#   # MacOS AMD64
+#   - id: mb2osm-darwin-amd64
+#     binary: mb2osm
+#     main: cmd/main.go
+#     goarch:
+#       - amd64
+#     goos:
+#       - darwin
+#     env:
+#       - CC=o64-clang
+#       - CXX=o64-clang++
+#     flags:
+#       - -trimpath
+
+#   # MacOS ARM64
+#   - id: mb2osm-darwin-arm64
+#     binary: mb2osm
+#     main: cmd/main.go
+#     goarch:
+#       - arm64
+#     goos:
+#       - darwin
+#     env:
+#       - CC=oa64-clang
+#       - CXX=oa64-clang++
+#     flags:
+#       - -trimpath
+
+#   # Linux AMD64
+#   - id: mb2osm-linux-amd64
+#     binary: mb2osm
+#     main: cmd/main.go
+#     env:
+#       - CC=x86_64-linux-gnu-gcc
+#       - CXX=x86_64-linux-gnu-g++
+#     goarch:
+#       - amd64
+#     goos:
+#       - linux
+#     flags:
+#       - -trimpath
+#     ldflags:
+#       - -extldflags "-lc -lrt -lpthread --static"
+
+#   # Linux ARM64
+#   - id: mb2osm-linux-arm64
+#     binary: mb2osm
+#     main: cmd/main.go
+#     goarch:
+#       - arm64
+#     goos:
+#       - linux
+#     env:
+#       - CC=aarch64-linux-gnu-gcc
+#       - CXX=aarch64-linux-gnu-g++
+#     flags:
+#       - -trimpath
+#     ldflags:
+#       - -extldflags "-lc -lrt -lpthread --static"
+
+#   # Android ARM64
+#   - id: mb2osm-android-arm64
+#     binary: mb2osm
+#     main: cmd/main.go
+#     goarch:
+#       - arm64
+#     goos:
+#       - android
+#     env:
+#       - CC=aarch64-linux-android-gcc
+#       - CXX=aarch64-linux-android-g++
+#     flags:
+#       - -trimpath
+#     ldflags:
+#       - -extldflags "-lc -lrt -lpthread --static"
+
+#   # Windows AMD64
+#   - id: mb2osm-windows-amd64
+#     binary: mb2osm
+#     main: cmd/main.go
+#     goarch:
+#       - amd64
+#     goos:
+#       - windows
+#     env:
+#       - CC=x86_64-w64-mingw32-gcc
+#       - CXX=x86_64-w64-mingw32-g++
+#     flags:
+#       - -trimpath
+#       - -buildmode=exe
+
+#   # Windows ARM64
+#   - id: mb2osm-windows-arm64
+#     binary: mb2osm
+#     main: cmd/main.go
+#     goarch:
+#       - arm64
+#     goos:
+#       - windows
+#     env:
+#       - CC=aarch64-w64-mingw32-gcc
+#       - CXX=aarch64-w64-mingw32-g++
+#     flags:
+#       - -trimpath
+#       - -buildmode=exe
