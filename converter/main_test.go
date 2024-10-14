@@ -10,7 +10,6 @@ func TestInvalidInput(t *testing.T) {
 	MbtilesToOsm(
 		"./testdata/file_does_not_exist.mbtiles",
 		"dummyfile.sqlitedb",
-		75,
 		true,
 	)
 }
@@ -29,7 +28,6 @@ func TestConvert(t *testing.T) {
 	err = MbtilesToOsm(
 		inputFile,
 		outputFile.Name(),
-		75,
 		true,
 	)
 	if err != nil {
@@ -43,7 +41,7 @@ func TestConvert(t *testing.T) {
 	}
 
 	// Check if the output file contains expected tables
-	db, err := sql.Open("sqlite3", outputFile.Name())
+	db, err := sql.Open("sqlite", outputFile.Name())
 	if err != nil {
 		t.Fatalf("Failed to open output database: %v", err)
 	}
